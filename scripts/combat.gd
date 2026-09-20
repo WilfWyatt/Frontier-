@@ -35,6 +35,8 @@ var fire_held: bool = false
 var joystick_touch: int = -1
 var fire_touch: int = -1
 var joystick_vector: Vector2 = Vector2.ZERO
+var joystick_start: Vector2 = Vector2.ZERO
+var joystick_knob: Vector2 = Vector2.ZERO
 var stars: Array[Dictionary] = []
 var bullets: Array[Dictionary] = []
 var enemy_bullets: Array[Dictionary] = []
@@ -114,14 +116,14 @@ func _process(delta: float) -> void:
 func _process_input(delta: float) -> void:
     var keyboard_direction: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down")
     var desired: Vector2 = keyboard_direction
-    if joystick_vector.length() > 0.05:
+    if joystick_touch >= 0 and joystick_vector.length() > 0.02:
         desired = joystick_vector
     if desired.length() > 1.0:
         desired = desired.normalized()
     var target_velocity: Vector2 = desired * PLAYER_SPEED
     var rate: float = PLAYER_ACCEL if desired.length() > 0.05 else PLAYER_DECEL
     player_velocity = player_velocity.move_toward(target_velocity, rate * delta)
-    fire_held = fire_held or Input.is_action_pressed("fire") or fire_touch >= 0
+    fire_held = fire_touch >= 0 or Input.is_action_pressed("fire")
     if Input.is_action_just_pressed("missile"):
         _fire_missile()
 
@@ -166,13 +168,15 @@ func _process_weapons(delta: float) -> void:
 
 func _fire_primary() -> void:
     primary_timer = PRIMARY_COOLDOWN
-    bullets.append({"position": player_position + Vector2(62.0, 0.0), "velocity": Vector2(BULLET_SPEED, 0.0), "damage": 12, "kind": "primary"})
+    var spawn: Vector2 = player_position + Vector2(62.0, 0.0)
+    bullets.append({"position": spawn, "previous_position": spawn, "velocity": Vector2(BULLET_SPEED, 0.0), "damage": 12, "kind": "primary"})
 
 func _fire_missile() -> void:
     if missile_timer > 0.0:
         return
     missile_timer = MISSILE_COOLDOWN
-    bullets.append({"position": player_position + Vector2(55.0, -4.0), "velocity": Vector2(470.0, 0.0), "damage": 34, "kind": "missile"})
+    var spawn: Vector2 = player_position + Vector2(55.0, -4.0)
+    bullets.append({"position": spawn, "previous_position": spawn, "velocity": Vector2(470.0, 0.0), "damage": 34, "kind": "missile"})
 
 func _process_enemies(delta: float) -> void:
     enemy_spawn_timer -= delta
@@ -222,13 +226,16 @@ func _spawn_enemy() -> void:
 func _enemy_fire(enemy: Dictionary) -> void:
     var enemy_position: Vector2 = enemy["position"] as Vector2
     var direction: Vector2 = (player_position - enemy_position).normalized()
-    enemy_bullets.append({"position": enemy_position + Vector2(-38.0, 0.0), "velocity": direction * ENEMY_BULLET_SPEED, "damage": 5})
+    var spawn: Vector2 = enemy_position + Vector2(-38.0, 0.0)
+    enemy_bullets.append({"position": spawn, "previous_position": spawn, "velocity": direction * ENEMY_BULLET_SPEED, "damage": 5})
 
 func _process_projectiles(delta: float) -> void:
     var next_bullets: Array[Dictionary] = []
     for bullet: Dictionary in bullets:
-        var position: Vector2 = bullet["position"] as Vector2
-        position += (bullet["velocity"] as Vector2) * delta
+        var previous_position: Vector2 = bullet["position"] as Vector2
+        var position: Vector2 = previous_position + (bullet["velocity"] as Vector2) * delta
+        bullet["previous_position"] = previous_position
+        bullet["position"] = position
         var hit: bool = false
         for enemy: Dictionary in enemies:
             if int(enemy["hp"]) <= 0:
@@ -241,18 +248,20 @@ func _process_projectiles(delta: float) -> void:
                 if int(enemy["hp"]) <= 0:
                     _enemy_destroyed()
                 break
-        if not hit and position.x < VIEW_SIZE.x + 80.0:
+        if not hit and position.x < VIEW_SIZE.x + 120.0 and position.x > -120.0:
             next_bullets.append(bullet)
     bullets = next_bullets
 
     var next_enemy_bullets: Array[Dictionary] = []
     for projectile: Dictionary in enemy_bullets:
-        var position: Vector2 = projectile["position"] as Vector2
-        position += (projectile["velocity"] as Vector2) * delta
+        var previous_position: Vector2 = projectile["position"] as Vector2
+        var position: Vector2 = previous_position + (projectile["velocity"] as Vector2) * delta
+        projectile["previous_position"] = previous_position
+        projectile["position"] = position
         if position.distance_to(player_position) < 34.0:
             player_hull -= int(projectile["damage"])
         elif not _asteroid_collision(position):
-            if position.x > -40.0 and position.x < VIEW_SIZE.x + 40.0 and position.y > 70.0 and position.y < 475.0:
+            if position.x > -80.0 and position.x < VIEW_SIZE.x + 80.0 and position.y > 55.0 and position.y < 485.0:
                 next_enemy_bullets.append(projectile)
     enemy_bullets = next_enemy_bullets
 
@@ -301,56 +310,91 @@ func _unhandled_input(event: InputEvent) -> void:
     _handle_input_event(event)
 
 func _input(event: InputEvent) -> void:
-    if event is InputEventScreenTouch or event is InputEventScreenDrag or event is InputEventMouseButton or event is InputEventMouseMotion:
-        _handle_input_event(event)
+    _handle_input_event(event)
 
 func _handle_input_event(event: InputEvent) -> void:
+    var position: Vector2 = _to_view_position(event_position(event))
     if event is InputEventScreenTouch:
         var touch: InputEventScreenTouch = event as InputEventScreenTouch
         if touch.pressed:
-            if _touch_in_rect(touch.position, Rect2(22.0, 390.0, 260.0, 145.0)) and joystick_touch < 0:
+            if _touch_in_rect(position, Rect2(24.0, 380.0, 285.0, 155.0)) and joystick_touch < 0:
                 joystick_touch = touch.index
-                _update_joystick(touch.position)
-            elif _touch_in_rect(touch.position, Rect2(1030.0, 400.0, 165.0, 92.0)) and fire_touch < 0:
+                joystick_start = position
+                joystick_knob = Vector2.ZERO
+                _update_joystick(position)
+            elif _touch_in_rect(position, Rect2(1020.0, 385.0, 190.0, 110.0)) and fire_touch < 0:
                 fire_touch = touch.index
                 fire_held = true
-            elif _touch_in_rect(touch.position, Rect2(850.0, 400.0, 150.0, 92.0)):
+            elif _touch_in_rect(position, Rect2(835.0, 385.0, 170.0, 110.0)):
                 _fire_missile()
         else:
             if touch.index == joystick_touch:
                 joystick_touch = -1
                 joystick_vector = Vector2.ZERO
+                joystick_knob = Vector2.ZERO
             if touch.index == fire_touch:
                 fire_touch = -1
                 fire_held = false
     elif event is InputEventScreenDrag:
         var drag: InputEventScreenDrag = event as InputEventScreenDrag
         if drag.index == joystick_touch:
-            _update_joystick(drag.position)
+            _update_joystick(position)
     elif event is InputEventMouseButton:
         var mouse: InputEventMouseButton = event as InputEventMouseButton
         if mouse.button_index == MOUSE_BUTTON_LEFT:
             if mouse.pressed:
-                if _touch_in_rect(mouse.position, Rect2(22.0, 390.0, 260.0, 145.0)):
+                if _touch_in_rect(position, Rect2(24.0, 380.0, 285.0, 155.0)) and joystick_touch < 0:
                     joystick_touch = 999
-                    _update_joystick(mouse.position)
-                elif _touch_in_rect(mouse.position, Rect2(1040.0, 390.0, 155.0, 110.0)):
+                    joystick_start = position
+                    joystick_knob = Vector2.ZERO
+                    _update_joystick(position)
+                elif _touch_in_rect(position, Rect2(1020.0, 385.0, 190.0, 110.0)):
                     fire_touch = 999
                     fire_held = true
-                elif _touch_in_rect(mouse.position, Rect2(860.0, 390.0, 155.0, 110.0)):
+                elif _touch_in_rect(position, Rect2(835.0, 385.0, 170.0, 110.0)):
                     _fire_missile()
             else:
                 if joystick_touch == 999:
                     joystick_touch = -1
                     joystick_vector = Vector2.ZERO
+                    joystick_knob = Vector2.ZERO
                 if fire_touch == 999:
                     fire_touch = -1
                     fire_held = false
+    elif event is InputEventMouseMotion:
+        var motion: InputEventMouseMotion = event as InputEventMouseMotion
+        if joystick_touch == 999:
+            _update_joystick(position)
+
+func event_position(event: InputEvent) -> Vector2:
+    if event is InputEventScreenTouch:
+        return (event as InputEventScreenTouch).position
+    if event is InputEventScreenDrag:
+        return (event as InputEventScreenDrag).position
+    if event is InputEventMouseButton:
+        return (event as InputEventMouseButton).position
+    if event is InputEventMouseMotion:
+        return (event as InputEventMouseMotion).position
+    return Vector2.ZERO
+
+func _to_view_position(position: Vector2) -> Vector2:
+    var viewport_size: Vector2 = get_viewport_rect().size
+    if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+        return position
+    return Vector2(position.x * VIEW_SIZE.x / viewport_size.x, position.y * VIEW_SIZE.y / viewport_size.y)
 
 func _update_joystick(position: Vector2) -> void:
-    var centre: Vector2 = Vector2(142.0, 456.0)
-    var offset: Vector2 = position - centre
-    joystick_vector = offset.limit_length(86.0) / 86.0
+    var delta: Vector2 = position - joystick_start
+    var radius: float = 78.0
+    if delta.length() > radius:
+        delta = delta.normalized() * radius
+    joystick_knob = delta
+    if delta.length() < 9.0:
+        joystick_vector = Vector2.ZERO
+    else:
+        joystick_vector = delta / radius
+        if joystick_vector.length() > 1.0:
+            joystick_vector = joystick_vector.normalized()
 
 func _touch_in_rect(position: Vector2, rect: Rect2) -> bool:
     return rect.has_point(position)
@@ -399,11 +443,15 @@ func _draw() -> void:
         draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
     for bullet: Dictionary in bullets:
         var position: Vector2 = bullet["position"] as Vector2
+        var previous_position: Vector2 = bullet["previous_position"] as Vector2
         var is_missile: bool = str(bullet["kind"]) == "missile"
-        draw_line(position, position - Vector2(22.0 if not is_missile else 36.0, 0.0), Color("f7d878"), 4.0 if is_missile else 2.5)
+        draw_line(previous_position, position, Color("f7d878"), 5.0 if is_missile else 3.0, true)
+        draw_circle(position, 5.0 if is_missile else 3.0, Color("fff0a5"))
     for projectile: Dictionary in enemy_bullets:
         var position: Vector2 = projectile["position"] as Vector2
-        draw_circle(position, 4.0, Color("ef7771"))
+        var previous_position: Vector2 = projectile["previous_position"] as Vector2
+        draw_line(previous_position, position, Color("ef7771", 0.75), 5.0, true)
+        draw_circle(position, 5.0, Color("ff817a"))
     _draw_combat_hud()
 
 func _draw_combat_hud() -> void:
