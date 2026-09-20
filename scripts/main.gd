@@ -66,11 +66,13 @@ func _build_shell() -> void:
     var background: ColorRect = ColorRect.new()
     background.color = BG
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    background.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root_ui.add_child(background)
 
     var top: HBoxContainer = HBoxContainer.new()
     top.position = Vector2(24, 18)
     top.size = Vector2(1232, 54)
+    top.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root_ui.add_child(top)
     var title: Label = Label.new()
     title.text = "F R O N T I E R"
@@ -92,17 +94,20 @@ func _build_shell() -> void:
     content = Control.new()
     content.position = Vector2(24, 84)
     content.size = Vector2(1232, 540)
+    content.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root_ui.add_child(content)
 
     footer = HBoxContainer.new()
     footer.position = Vector2(24, 640)
     footer.size = Vector2(1232, 58)
     footer.add_theme_constant_override("separation", 10)
+    footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root_ui.add_child(footer)
     toast = Label.new()
     toast.position = Vector2(24, 604)
     toast.size = Vector2(1232, 30)
     toast.add_theme_color_override("font_color", AMBER)
+    toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
     root_ui.add_child(toast)
 
 func _clear_content() -> void:

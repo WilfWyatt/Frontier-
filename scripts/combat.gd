@@ -33,6 +33,7 @@ var player_velocity: Vector2 = Vector2.ZERO
 var player_position: Vector2 = PLAYER_START
 var fire_held: bool = false
 var joystick_touch: int = -1
+var fire_touch: int = -1
 var joystick_vector: Vector2 = Vector2.ZERO
 var stars: Array[Dictionary] = []
 var bullets: Array[Dictionary] = []
@@ -49,6 +50,8 @@ var fighter_texture: Texture2D
 var asteroid_texture: Texture2D
 
 func _ready() -> void:
+    process_mode = Node.PROCESS_MODE_ALWAYS
+    set_process_input(true)
     player_texture = load("res://assets/frontier_player.svg") as Texture2D
     pirate_texture = load("res://assets/frontier_pirate.svg") as Texture2D
     fighter_texture = load("res://assets/frontier_fighter.svg") as Texture2D
@@ -118,7 +121,7 @@ func _process_input(delta: float) -> void:
     var target_velocity: Vector2 = desired * PLAYER_SPEED
     var rate: float = PLAYER_ACCEL if desired.length() > 0.05 else PLAYER_DECEL
     player_velocity = player_velocity.move_toward(target_velocity, rate * delta)
-    fire_held = fire_held or Input.is_action_pressed("fire")
+    fire_held = fire_held or Input.is_action_pressed("fire") or fire_touch >= 0
     if Input.is_action_just_pressed("missile"):
         _fire_missile()
 
@@ -295,21 +298,31 @@ func _complete_contract() -> void:
     emit_signal("combat_won", 220 if contract_kind == "pirate" else 190, 1)
 
 func _unhandled_input(event: InputEvent) -> void:
+    _handle_input_event(event)
+
+func _input(event: InputEvent) -> void:
+    if event is InputEventScreenTouch or event is InputEventScreenDrag or event is InputEventMouseButton or event is InputEventMouseMotion:
+        _handle_input_event(event)
+
+func _handle_input_event(event: InputEvent) -> void:
     if event is InputEventScreenTouch:
         var touch: InputEventScreenTouch = event as InputEventScreenTouch
         if touch.pressed:
-            if _touch_in_rect(touch.position, Rect2(22.0, 390.0, 260.0, 145.0)):
+            if _touch_in_rect(touch.position, Rect2(22.0, 390.0, 260.0, 145.0)) and joystick_touch < 0:
                 joystick_touch = touch.index
                 _update_joystick(touch.position)
-            elif _touch_in_rect(touch.position, Rect2(1030.0, 400.0, 165.0, 92.0)):
+            elif _touch_in_rect(touch.position, Rect2(1030.0, 400.0, 165.0, 92.0)) and fire_touch < 0:
+                fire_touch = touch.index
                 fire_held = true
-                joystick_touch = -1
             elif _touch_in_rect(touch.position, Rect2(850.0, 400.0, 150.0, 92.0)):
                 _fire_missile()
+        else:
+            if touch.index == joystick_touch:
                 joystick_touch = -1
-        elif touch.index == joystick_touch:
-            joystick_touch = -1
-            joystick_vector = Vector2.ZERO
+                joystick_vector = Vector2.ZERO
+            if touch.index == fire_touch:
+                fire_touch = -1
+                fire_held = false
     elif event is InputEventScreenDrag:
         var drag: InputEventScreenDrag = event as InputEventScreenDrag
         if drag.index == joystick_touch:
@@ -322,12 +335,17 @@ func _unhandled_input(event: InputEvent) -> void:
                     joystick_touch = 999
                     _update_joystick(mouse.position)
                 elif _touch_in_rect(mouse.position, Rect2(1040.0, 390.0, 155.0, 110.0)):
+                    fire_touch = 999
                     fire_held = true
                 elif _touch_in_rect(mouse.position, Rect2(860.0, 390.0, 155.0, 110.0)):
                     _fire_missile()
-            elif joystick_touch == 999:
-                joystick_touch = -1
-                joystick_vector = Vector2.ZERO
+            else:
+                if joystick_touch == 999:
+                    joystick_touch = -1
+                    joystick_vector = Vector2.ZERO
+                if fire_touch == 999:
+                    fire_touch = -1
+                    fire_held = false
 
 func _update_joystick(position: Vector2) -> void:
     var centre: Vector2 = Vector2(142.0, 456.0)
