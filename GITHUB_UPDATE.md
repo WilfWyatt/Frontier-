@@ -1,26 +1,20 @@
-# FRONTIER — Build 03 GitHub Update
+# FRONTIER Build 04 — GitHub Update
 
-Apply this package **on top of FRONTIER Build 02**.
-
-## Replace these files
+Replace this file in your repository:
 
 ```text
-scripts/main.gd
 scripts/combat.gd
 ```
 
-Copy both files into the matching `scripts/` directory in your GitHub working copy and replace the existing files.
+No other existing files need changing for Build 04.
 
-## No asset changes
+Suggested commit:
 
-Build 03 does not add, remove or change assets, scenes, or `project.godot`.
+`Fix 360-degree combat movement and projectile motion`
 
-## What this fixes
-
-- The terminal UI was intercepting touch/mouse input before the combat Node2D could receive it.
-- The mobile FIRE button was only registering a momentary touch rather than a held state.
-- Combat processing/input handling is now explicitly enabled while the combat node is active.
-
-## Suggested commit
-
-`Fix mobile combat input and continuous fire`
+This update specifically addresses:
+- full 360-degree virtual joystick movement
+- viewport-scaled touch coordinates
+- simultaneous joystick + FIRE multitouch
+- moving primary bullets/missiles
+- moving enemy projectiles with visible trails
